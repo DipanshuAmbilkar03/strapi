@@ -12,6 +12,8 @@ const mockUseDraftRelationCountQuery = jest.fn();
 const mockDiscard = jest.fn();
 const mockFetchDraftDocument = jest.fn();
 const mockNavigate = jest.fn();
+const mockResetForm = jest.fn();
+const mockSetErrors = jest.fn();
 const mockParams: { id?: string } = {};
 let mockIsRelationModalContext = true;
 let mockIsAnyRelationModalOpen = false;
@@ -58,8 +60,8 @@ jest.mock('@strapi/admin/strapi-admin', () => ({
       getValues: () => ({}),
       validate: async () => ({ errors: undefined }),
       setSubmitting: jest.fn(),
-      setErrors: jest.fn(),
-      resetForm: jest.fn(),
+      setErrors: mockSetErrors,
+      resetForm: mockResetForm,
     }),
   useQueryParams: () => [{ rawQuery: '', query: {} }],
   useGuidedTour: () => jest.fn(),
@@ -551,6 +553,43 @@ describe('nested relation parent updates', () => {
         payload: { documentMeta: { model: 'api::child.child', documentId: 'existing-child' } },
       })
     );
+  });
+
+  it('keeps the form values and pending connects when the update fails with an ApplicationError', async () => {
+    mockUpdateDocument.mockResolvedValue({
+      error: { name: 'ApplicationError', message: 'Something went wrong' },
+    });
+
+    const { user } = render(
+      <ExistingDocumentActionHarness Action={UpdateAction} label="Save existing" />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save existing' }));
+
+    await waitFor(() => expect(mockUpdateDocument).toHaveBeenCalled());
+    expect(mockResetForm).not.toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'CLEAR_PENDING_CONNECTS' })
+    );
+  });
+
+  it('sets field errors without resetting the form when validation rejects the update', async () => {
+    mockUpdateDocument.mockResolvedValue({
+      error: {
+        name: 'ValidationError',
+        message: 'Slug is already used',
+        details: { errors: [] },
+      },
+    });
+
+    const { user } = render(
+      <ExistingDocumentActionHarness Action={UpdateAction} label="Save existing" />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save existing' }));
+
+    await waitFor(() => expect(mockSetErrors).toHaveBeenCalled());
+    expect(mockResetForm).not.toHaveBeenCalled();
   });
 });
 

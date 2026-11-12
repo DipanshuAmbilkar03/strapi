@@ -1381,17 +1381,26 @@ const UpdateAction: DocumentActionComponent = ({
           omitLockedSharedFields(data)
         );
 
-        if ('error' in res && isBaseQueryError(res.error) && res.error.name === 'ValidationError') {
-          setErrors(formatValidationErrors(res.error));
-        } else {
-          resetForm(latestValues);
-          // This document is now persisted with whatever local connect patches were merged into
-          // it, if any (see the pendingConnects explanation below) — they'd be stale from here on.
-          dispatch?.({
-            type: 'CLEAR_PENDING_CONNECTS',
-            payload: { documentMeta: { model, documentId } },
-          });
+        if ('error' in res) {
+          if (isBaseQueryError(res.error) && res.error.name === 'ValidationError') {
+            setErrors(formatValidationErrors(res.error));
+          }
+
+          /**
+           * Nothing was saved. Keep the form values and the pending connects: resetting
+           * the form here marks it clean and would discard relation edits that have not
+           * reached the server yet.
+           */
+          return;
         }
+
+        resetForm(latestValues);
+        // This document is now persisted with whatever local connect patches were merged into
+        // it, if any (see the pendingConnects explanation below) — they'd be stale from here on.
+        dispatch?.({
+          type: 'CLEAR_PENDING_CONNECTS',
+          payload: { documentMeta: { model, documentId } },
+        });
       } else {
         const { data } = handleInvisibleAttributes(transformDocumentData(latestValues), {
           schema: suitableSchema,
